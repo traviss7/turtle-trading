@@ -14,10 +14,10 @@ PORTFOLIO = [
     {"name": "삼성전기",            "ticker": "009150.KS", "avg_krw": 388_539,   "shares": 25},
     {"name": "두산에너빌리티",      "ticker": "034020.KS", "avg_krw": 123_100,   "shares": 82},
     {"name": "한화오션",            "ticker": "042660.KS", "avg_krw": 135_000,   "shares": 44},
-    {"name": "웨스턴디지털(WDC)",   "ticker": "WDC",       "avg_krw": 754_195,   "shares": 2},
+    {"name": "샌디스크(SNDK)",      "ticker": "SNDK",      "avg_krw": 754_195,   "shares": 2},
 ]
 
-USD_TICKERS = {"WDC"}
+USD_TICKERS = {"SNDK"}
 
 
 @st.cache_data(ttl=300)
