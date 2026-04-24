@@ -50,8 +50,16 @@ def calc_atr(df, period=20):
 
 
 def analyze(stock, df, usd_krw):
-    if df is None or len(df) < 22:
-        return None
+    if df is None or len(df) < 5:
+        return {
+            "name": stock["name"], "ticker": stock["ticker"],
+            "shares": stock["shares"], "avg": stock["avg_krw"],
+            "current": None, "n": None, "low_20": None, "high_55": None,
+            "pnl": None, "pnl_pct": None, "exit_signal": False,
+            "stop_loss": None, "add1": None, "add2": None, "add3": None,
+            "dist_exit_pct": None, "value": 0, "cost": stock["avg_krw"] * stock["shares"],
+            "is_usd": stock["ticker"] in USD_TICKERS, "no_data": True,
+        }
 
     is_usd = stock["ticker"] in USD_TICKERS
     fx = usd_krw if is_usd else 1.0
@@ -90,6 +98,7 @@ def analyze(stock, df, usd_krw):
         "value":       current * shares,
         "cost":        avg * shares,
         "is_usd":      is_usd,
+        "no_data":     False,
     }
 
 
@@ -124,7 +133,7 @@ with st.spinner("시세 데이터 불러오는 중..."):
 st.sidebar.metric("USD/KRW", f"{usd_krw:,.0f} 원")
 
 # 분석
-results = [r for s in PORTFOLIO if (r := analyze(s, all_data.get(s["ticker"]), usd_krw))]
+results = [analyze(s, all_data.get(s["ticker"]), usd_krw) for s in PORTFOLIO]
 
 if not results:
     st.error("데이터를 불러올 수 없습니다. 잠시 후 새로고침 해주세요.")
@@ -165,7 +174,7 @@ else:
 # 손절가 근접 경고 (stop_loss의 5% 이내)
 near_stops = [
     r for r in results
-    if not r["exit_signal"] and r["n"] > 0 and r["current"] < r["stop_loss"] * 1.05
+    if not r.get("no_data") and not r["exit_signal"] and r["n"] > 0 and r["current"] < r["stop_loss"] * 1.05
 ]
 for r in near_stops:
     st.warning(
@@ -179,6 +188,8 @@ st.divider()
 st.subheader("📋 전체 포지션")
 
 def signal_label(r):
+    if r.get("no_data"):
+        return "⚫ 데이터없음"
     if r["exit_signal"]:
         return "🚨 청산"
     if r["n"] > 0 and r["current"] < r["stop_loss"] * 1.05:
@@ -189,16 +200,17 @@ def signal_label(r):
 
 rows = []
 for r in results:
+    nd = r.get("no_data")
     rows.append({
         "종목":          r["name"],
-        "현재가(원)":    f"{r['current']:,.0f}",
+        "현재가(원)":    "데이터없음" if nd else f"{r['current']:,.0f}",
         "매수가(원)":    f"{r['avg']:,.0f}",
-        "수익률":        f"{r['pnl_pct']:+.1f}%",
-        "평가손익(만원)": f"{r['pnl'] / 1e4:+.1f}",
-        "N (ATR20)":     f"{r['n']:,.0f}",
-        "20일저점":      f"{r['low_20']:,.0f}",
-        "청산까지":      f"{r['dist_exit_pct']:+.1f}%",
-        "손절가(-2N)":   f"{r['stop_loss']:,.0f}",
+        "수익률":        "-"         if nd else f"{r['pnl_pct']:+.1f}%",
+        "평가손익(만원)": "-"        if nd else f"{r['pnl'] / 1e4:+.1f}",
+        "N (ATR20)":     "-"         if nd else f"{r['n']:,.0f}",
+        "20일저점":      "-"         if nd else f"{r['low_20']:,.0f}",
+        "청산까지":      "-"         if nd else f"{r['dist_exit_pct']:+.1f}%",
+        "손절가(-2N)":   "-"         if nd else f"{r['stop_loss']:,.0f}",
         "상태":          signal_label(r),
     })
 
@@ -210,8 +222,15 @@ st.divider()
 st.subheader("🔍 종목별 상세")
 
 for r in results:
-    label = f"{r['name']} ({r['ticker']})  —  {r['pnl_pct']:+.1f}%  {signal_label(r)}"
+    nd = r.get("no_data")
+    pnl_str = "데이터없음" if nd else f"{r['pnl_pct']:+.1f}%"
+    label = f"{r['name']} ({r['ticker']})  —  {pnl_str}  {signal_label(r)}"
     with st.expander(label, expanded=r["exit_signal"]):
+
+        if nd:
+            st.warning(f"시세 데이터를 가져올 수 없습니다. ({r['ticker']})")
+            st.write(f"매수가: {r['avg']:,.0f}원  |  보유수량: {r['shares']}주")
+            continue
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("현재가",       f"{r['current']:,.0f} 원",   f"{r['pnl_pct']:+.1f}%")
@@ -224,11 +243,11 @@ for r in results:
         unit_size = int((capital * risk_pct / 100) / (2 * r["n"])) if r["n"] > 0 else 0
 
         detail = pd.DataFrame([
-            {"구분": "➕ 애드업 3차  (+1.5N)", "가격(원)": f"{r['add3']:,.0f}",    "설명": "4번째 유닛 진입가"},
-            {"구분": "➕ 애드업 2차  (+1.0N)", "가격(원)": f"{r['add2']:,.0f}",    "설명": "3번째 유닛 진입가"},
-            {"구분": "➕ 애드업 1차  (+0.5N)", "가격(원)": f"{r['add1']:,.0f}",    "설명": "2번째 유닛 진입가"},
-            {"구분": "📌 평균 매수가",          "가격(원)": f"{r['avg']:,.0f}",     "설명": "현재 기준 진입가"},
-            {"구분": "🔴 20일 저점 (청산선)",  "가격(원)": f"{r['low_20']:,.0f}",  "설명": "System 2 청산 트리거"},
+            {"구분": "➕ 애드업 3차  (+1.5N)", "가격(원)": f"{r['add3']:,.0f}",      "설명": "4번째 유닛 진입가"},
+            {"구분": "➕ 애드업 2차  (+1.0N)", "가격(원)": f"{r['add2']:,.0f}",      "설명": "3번째 유닛 진입가"},
+            {"구분": "➕ 애드업 1차  (+0.5N)", "가격(원)": f"{r['add1']:,.0f}",      "설명": "2번째 유닛 진입가"},
+            {"구분": "📌 평균 매수가",          "가격(원)": f"{r['avg']:,.0f}",       "설명": "현재 기준 진입가"},
+            {"구분": "🔴 20일 저점 (청산선)",  "가격(원)": f"{r['low_20']:,.0f}",    "설명": "System 2 청산 트리거"},
             {"구분": "🛑 손절가  (−2N)",       "가격(원)": f"{r['stop_loss']:,.0f}", "설명": "하드 손절선"},
         ])
         st.table(detail)
