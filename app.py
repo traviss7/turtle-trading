@@ -46,10 +46,10 @@ def _cached_alert(slot_key: str, token: str, chat_id: str, message: str) -> bool
     return _tg_send(token, chat_id, message)
 
 
-def build_alert_message(results: list) -> str:
+def build_alert_message(results: list, title: str) -> str:
     now = datetime.now(KST)
     total_units = sum(r["units"] for r in results if not r.get("no_data"))
-    lines = [f"🐢 *터틀 트레이딩 알람*  {now.strftime('%Y-%m-%d %H:%M')} KST\n"]
+    lines = [f"{title}  {now.strftime('%Y-%m-%d %H:%M')} KST\n"]
 
     exits = [r for r in results if not r.get("no_data") and r["exit_signal"]]
     adds  = [
@@ -82,7 +82,8 @@ def build_alert_message(results: list) -> str:
     if not exits and not adds and not stops:
         lines.append("✅ 특이사항 없음")
 
-    lines.append(f"\n📊 총 유닛: {total_units}/{MAX_UNITS_TOTAL}")
+    if total_units > 0:
+        lines.append(f"\n📊 총 유닛: {total_units}/{MAX_UNITS_TOTAL}")
     return "\n".join(lines)
 
 
@@ -91,12 +92,26 @@ def maybe_send_daily_alerts(results: list, token: str, chat_id: str):
         return
     now = datetime.now(KST)
     h, m = now.hour, now.minute
-    in_morning = (h == 9 and m < 10)
-    in_closing  = (h == 15 and 20 <= m < 30)
-    if not (in_morning or in_closing):
-        return
-    slot = f"{now.strftime('%Y-%m-%d')}_{'am' if in_morning else 'pm'}"
-    _cached_alert(slot, token, chat_id, build_alert_message(results))
+
+    # 한국 장 시작 09:00 / 장 마감 15:20 — 한국 종목만
+    in_kr_open  = (h == 9 and m < 10)
+    in_kr_close = (h == 15 and 20 <= m < 30)
+    # 미국 장 마감 종가 알림: 여름(EDT) 05:00, 겨울(EST) 06:00 — 미국 종목만
+    in_us_close = (h == 5 and m < 10) or (h == 6 and m < 10)
+
+    date_str = now.strftime("%Y-%m-%d")
+
+    if in_kr_open or in_kr_close:
+        kr_results = [r for r in results if not r.get("is_usd")]
+        slot = f"{date_str}_{'kr_am' if in_kr_open else 'kr_pm'}"
+        _cached_alert(slot, token, chat_id,
+                      build_alert_message(kr_results, "🇰🇷 *한국주식 터틀 알람*"))
+
+    if in_us_close:
+        us_results = [r for r in results if r.get("is_usd")]
+        slot = f"{date_str}_us"
+        _cached_alert(slot, token, chat_id,
+                      build_alert_message(us_results, "🇺🇸 *미국주식 종가 알람*"))
 
 
 # ── 데이터 ──────────────────────────────────────────────────────────────
@@ -435,7 +450,7 @@ with st.expander("📡 텔레그램 알림 테스트"):
     )
     if st.button("📨 지금 테스트 알림 보내기"):
         if tg_token and tg_chat_id:
-            msg = build_alert_message(results)
+            msg = build_alert_message(results, "🐢 *터틀 트레이딩 테스트 알람*")
             ok  = _tg_send(tg_token, tg_chat_id, msg)
             st.success("✅ 전송 성공") if ok else st.error("❌ 전송 실패 — Token/Chat ID 확인")
         else:
