@@ -235,6 +235,9 @@ st.sidebar.markdown(
 )
 
 st.sidebar.divider()
+st.sidebar.page_link("pages/1_백테스트.py", label="📈 백테스트로 전략 검증", icon="📈")
+
+st.sidebar.divider()
 st.sidebar.subheader("📡 텔레그램 알림")
 try:
     _def_token   = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
