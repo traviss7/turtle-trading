@@ -360,7 +360,11 @@ for r in results:
         "수익률":         "-" if nd else f"{r['pnl_pct']:+.1f}%",
         "평가손익(만원)": "-" if nd else f"{r['pnl'] / 1e4:+.1f}",
         "N (ATR20)":      "-" if nd else f"{r['n']:,.0f}",
-        "다음 애드업":    "-" if nd else ("최대유닛" if r["next_add"] is None else f"{r['next_add']:,.0f}"),
+        "다음 애드업":    "-" if nd else (
+                              "최대유닛" if r["next_add"] is None
+                              else ("▶ 지금 애드업" if r["current"] >= r["next_add"]
+                                    else f"{r['next_add']:,.0f}")
+                          ),
         "20일저점":       "-" if nd else f"{r['low_20']:,.0f}",
         "청산까지":       "-" if nd else f"{r['dist_exit_pct']:+.1f}%",
         "손절가(-2N)":    "-" if nd else f"{r['stop_loss']:,.0f}",
@@ -429,16 +433,15 @@ for r in results:
         if df_chart is not None and not df_chart.empty:
             fx   = usd_krw if r["is_usd"] else 1.0
             days = min(60, len(df_chart))
-            chart_data = pd.DataFrame(
-                {
-                    "종가":           df_chart["Close"].values.flatten()[-days:] * fx,
-                    "20일저점(청산)": [r["low_20"]]    * days,
-                    "손절가(-2N)":    [r["stop_loss"]] * days,
-                    "매수가":         [r["avg"]]        * days,
-                    "다음애드업":     [r["next_add"] if r["next_add"] else r["add3"]] * days,
-                },
-                index=df_chart.index[-days:],
-            )
+            chart_cols = {
+                "종가":           df_chart["Close"].values.flatten()[-days:] * fx,
+                "20일저점(청산)": [r["low_20"]]    * days,
+                "손절가(-2N)":    [r["stop_loss"]] * days,
+                "매수가":         [r["avg"]]        * days,
+            }
+            if r["next_add"] and r["current"] < r["next_add"]:
+                chart_cols["다음애드업"] = [r["next_add"]] * days
+            chart_data = pd.DataFrame(chart_cols, index=df_chart.index[-days:])
             st.line_chart(chart_data)
 
 # ── 텔레그램 수동 테스트 ────────────────────────────────────────────────
