@@ -1,0 +1,23 @@
+{
+  "timestamp": "2024-01-01T00:00:00+09:00",
+  "usd_krw": 1380,
+  "results": [
+    {
+      "name": "SK하이닉스",
+      "ticker": "000660.KS",
+      "current": null,
+      "avg": 691909,
+      "units": 1,
+      "n": null,
+      "low_20": null,
+      "stop_loss": null,
+      "add1": null,
+      "add2": null,
+      "add3": null,
+      "next_add": null,
+      "pnl_pct": null,
+      "exit_signal": false,
+      "no_data": true
+    }
+  ]
+}
