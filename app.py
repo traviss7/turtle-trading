@@ -11,16 +11,15 @@ KST = timezone(timedelta(hours=9))
 
 # ── 포트폴리오 (units: 현재 보유 유닛 수) ────────────────────────────────
 PORTFOLIO = [
-    {"name": "SK하이닉스",          "ticker": "000660.KS", "avg_krw": 691_909,   "shares": 44,  "units": 1},
-    {"name": "삼성중공업",          "ticker": "010140.KS", "avg_krw": 32_500,    "shares": 308, "units": 1},
-    {"name": "한화에어로스페이스",  "ticker": "012450.KS", "avg_krw": 1_408_000, "shares": 7,   "units": 1},
-    {"name": "삼성전기",            "ticker": "009150.KS", "avg_krw": 388_539,   "shares": 25,  "units": 1},
-    {"name": "두산에너빌리티",      "ticker": "034020.KS", "avg_krw": 123_100,   "shares": 82,  "units": 1},
-    {"name": "한화오션",            "ticker": "042660.KS", "avg_krw": 135_000,   "shares": 44,  "units": 1},
-    {"name": "샌디스크(SNDK)",      "ticker": "SNDK",      "avg_krw": 754_195,   "shares": 2,   "units": 1},
+    {"name": "SK하이닉스",      "ticker": "000660.KS", "avg_krw": 1_101_642, "shares": 62, "units": 1},
+    {"name": "삼성화재",        "ticker": "000810.KS", "avg_krw": 552_666,   "shares": 15, "units": 1},
+    {"name": "삼성전기",        "ticker": "009150.KS", "avg_krw": 929_564,   "shares": 43, "units": 1},
+    {"name": "롯데쇼핑",        "ticker": "023530.KS", "avg_krw": 195_625,   "shares": 6,  "units": 1},
+    {"name": "알파벳(GOOG)",    "ticker": "GOOG",      "avg_krw": 578_506,   "shares": 10, "units": 1},
+    {"name": "샌디스크(SNDK)",  "ticker": "SNDK",      "avg_krw": 1_300_908, "shares": 4,  "units": 1},
 ]
 
-USD_TICKERS        = {"SNDK"}
+USD_TICKERS        = {"GOOG", "SNDK"}
 ATR_PERIOD         = 20
 MAX_UNITS_PER_MKT  = 4
 MAX_UNITS_TOTAL    = 12
