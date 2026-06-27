@@ -9,18 +9,25 @@ st.set_page_config(page_title="터틀 트레이딩 대시보드", layout="wide",
 
 KST = timezone(timedelta(hours=9))
 
+# ── 계좌별 총자본 (원화 기준, 직접 업데이트) ─────────────────────────────
+ACCOUNT_CAPITAL = {
+    "일반": 286_124_085,
+    # "ISA":  0,  # 추후 추가
+    # "IRP":  0,
+    # "DC":   0,
+}
+
 # ── 포트폴리오 (units: 현재 보유 유닛 수) ────────────────────────────────
 PORTFOLIO = [
-    {"name": "SK하이닉스",          "ticker": "000660.KS", "avg_krw": 691_909,   "shares": 44,  "units": 1},
-    {"name": "삼성중공업",          "ticker": "010140.KS", "avg_krw": 32_500,    "shares": 308, "units": 1},
-    {"name": "한화에어로스페이스",  "ticker": "012450.KS", "avg_krw": 1_408_000, "shares": 7,   "units": 1},
-    {"name": "삼성전기",            "ticker": "009150.KS", "avg_krw": 388_539,   "shares": 25,  "units": 1},
-    {"name": "두산에너빌리티",      "ticker": "034020.KS", "avg_krw": 123_100,   "shares": 82,  "units": 1},
-    {"name": "한화오션",            "ticker": "042660.KS", "avg_krw": 135_000,   "shares": 44,  "units": 1},
-    {"name": "샌디스크(SNDK)",      "ticker": "SNDK",      "avg_krw": 754_195,   "shares": 2,   "units": 1},
+    {"name": "SK하이닉스",   "ticker": "000660.KS", "avg_krw": 1_101_642,  "shares": 62, "units": 1, "account": "일반"},
+    {"name": "삼성화재",     "ticker": "000810.KS", "avg_krw": 552_666,    "shares": 15, "units": 1, "account": "일반"},
+    {"name": "삼성전기",     "ticker": "009150.KS", "avg_krw": 929_564,    "shares": 43, "units": 1, "account": "일반"},
+    {"name": "롯데쇼핑",     "ticker": "023530.KS", "avg_krw": 195_019,    "shares": 13, "units": 1, "account": "일반"},
+    {"name": "샌디스크",     "ticker": "SNDK",      "avg_krw": 1_206_564,  "shares": 4,  "units": 1, "account": "일반"},  # 872.8375 USD × 1382원
+    {"name": "IBB",          "ticker": "IBB",       "avg_krw": 252_380,    "shares": 11, "units": 1, "account": "일반"},  # 182.6863 USD × 1382원
 ]
 
-USD_TICKERS        = {"SNDK"}
+USD_TICKERS        = {"SNDK", "IBB"}
 ATR_PERIOD         = 20
 MAX_UNITS_PER_MKT  = 4
 MAX_UNITS_TOTAL    = 12
@@ -79,7 +86,18 @@ def build_alert_message(results: list, title: str) -> str:
         lines.append("\n⚠️ *손절가 근접*")
         for r in stops:
             lines.append(f"  • {r['name']}: {r['current']:,.0f}원  손절 {r['stop_loss']:,.0f}원")
-    if not exits and not adds and not stops:
+    # 1% 리스크 초과 알림
+    risk_alerts = [r for r in results if not r.get("no_data") and r.get("risk_alert")]
+    if risk_alerts:
+        lines.append("\n🔴 *1% 리스크 초과*")
+        for r in risk_alerts:
+            lines.append(
+                f"  • {r['name']} [{r['account']}]: "
+                f"리스크 {r['risk_pct_actual']:.2f}% "
+                f"({r['risk_amount']/1e4:,.0f}만원 / 총자본 {r['acct_capital']/1e8:.1f}억)"
+            )
+
+    if not exits and not adds and not stops and not risk_alerts:
         lines.append("✅ 특이사항 없음")
 
     if total_units > 0:
@@ -176,24 +194,36 @@ def analyze(stock, df, usd_krw):
     # 유닛별 다음 애드업 목표가 (units=1→add1, 2→add2, 3→add3, 4→없음)
     next_add = {1: add1, 2: add2, 3: add3}.get(units) if units < MAX_UNITS_PER_MKT else None
 
+    stop_loss        = avg - 2 * n
+    account          = stock.get("account", "일반")
+    acct_capital     = ACCOUNT_CAPITAL.get(account, 0)
+    risk_amount      = 2 * n * shares          # 손절 시 예상 손실액
+    risk_pct_actual  = (risk_amount / acct_capital * 100) if acct_capital > 0 else 0
+    risk_alert       = acct_capital > 0 and risk_pct_actual > 1.0  # 1% 초과
+
     return {
         **base,
-        "current":     current,
-        "n":           n,
-        "low_20":      low_20,
-        "high_55":     high_55,
-        "pnl":         (current - avg) * shares,
-        "pnl_pct":     (current - avg) / avg * 100,
-        "exit_signal": current < low_20,
-        "stop_loss":   avg - 2 * n,
-        "add1":        add1,
-        "add2":        add2,
-        "add3":        add3,
-        "next_add":    next_add,
-        "dist_exit_pct": (current - low_20) / current * 100,
-        "value":       current * shares,
-        "cost":        avg * shares,
-        "no_data":     False,
+        "current":          current,
+        "n":                n,
+        "low_20":           low_20,
+        "high_55":          high_55,
+        "pnl":              (current - avg) * shares,
+        "pnl_pct":          (current - avg) / avg * 100,
+        "exit_signal":      current < low_20,
+        "stop_loss":        stop_loss,
+        "add1":             add1,
+        "add2":             add2,
+        "add3":             add3,
+        "next_add":         next_add,
+        "dist_exit_pct":    (current - low_20) / current * 100,
+        "value":            current * shares,
+        "cost":             avg * shares,
+        "no_data":          False,
+        "account":          account,
+        "acct_capital":     acct_capital,
+        "risk_amount":      risk_amount,
+        "risk_pct_actual":  risk_pct_actual,
+        "risk_alert":       risk_alert,
     }
 
 
@@ -218,7 +248,10 @@ st.caption(
 
 # ── 사이드바 ────────────────────────────────────────────────────────────
 st.sidebar.header("⚙️ 설정")
-capital  = st.sidebar.number_input("총 자본 (원)", value=100_000_000, step=5_000_000, format="%d")
+st.sidebar.markdown("**계좌별 총자본**")
+for acct, cap in ACCOUNT_CAPITAL.items():
+    st.sidebar.metric(acct, f"{cap/1e8:.2f} 억원")
+capital  = ACCOUNT_CAPITAL.get("일반", 100_000_000)  # 단위 계산용 (일반 계좌 기준)
 risk_pct = st.sidebar.slider("단위 리스크 (%)", 0.5, 2.0, 2.0, 0.25)
 if st.sidebar.button("🔄 새로고침", type="primary"):
     st.cache_data.clear()
@@ -330,6 +363,16 @@ for r in near_stops:
         f"현재가 {r['current']:,.0f}원 / 손절가(-2N) {r['stop_loss']:,.0f}원"
     )
 
+# 1% 리스크 초과 경고
+risk_alerts = [r for r in results if not r.get("no_data") and r.get("risk_alert")]
+for r in risk_alerts:
+    st.error(
+        f"🔴 **1% 리스크 초과 — {r['name']}** [{r['account']}]  |  "
+        f"리스크 {r['risk_pct_actual']:.2f}%  "
+        f"(손절 시 손실 {r['risk_amount']/1e4:,.0f}만원 / 총자본 {r['acct_capital']/1e8:.1f}억)  "
+        f"→ 포지션 축소 검토"
+    )
+
 # 애드업 신호
 add_signals = [
     r for r in results
@@ -368,6 +411,7 @@ for r in results:
         "20일저점":       "-" if nd else f"{r['low_20']:,.0f}",
         "청산까지":       "-" if nd else f"{r['dist_exit_pct']:+.1f}%",
         "손절가(-2N)":    "-" if nd else f"{r['stop_loss']:,.0f}",
+        "리스크%":        "-" if nd else f"{r['risk_pct_actual']:.2f}%{'🔴' if r.get('risk_alert') else ''}",
         "상태":           signal_label(r),
     })
 
