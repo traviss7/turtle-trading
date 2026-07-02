@@ -134,21 +134,56 @@ def maybe_send_daily_alerts(results: list, token: str, chat_id: str):
 
 # ── 데이터 ──────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def fetch_all():
-    try:
-        fx_df   = yf.download("USDKRW=X", period="5d", progress=False)
-        usd_krw = float(fx_df["Close"].values.flatten()[-1])
-    except Exception:
+    import time
+
+    def _download_with_retry(ticker, period, tries=3, wait=2):
+        for i in range(tries):
+            try:
+                df = yf.download(ticker, period=period, progress=False, threads=False)
+                if df is not None and not df.empty:
+                    return df
+            except Exception:
+                pass
+            time.sleep(wait * (i + 1))  # 2s, 4s, 6s backoff
+        return None
+
+    # 환율 (재시도 포함, 최종 실패 시 고정값 폴백)
+    fx_df = _download_with_retry("USDKRW=X", "5d")
+    if fx_df is not None:
+        try:
+            usd_krw = float(fx_df["Close"].values.flatten()[-1])
+        except Exception:
+            usd_krw = 1_380
+    else:
         usd_krw = 1_380
 
+    # 종목 배치 다운로드 (요청 수를 줄여 rate limit 회피)
+    tickers = [s["ticker"] for s in PORTFOLIO]
     data = {}
-    for s in PORTFOLIO:
-        try:
-            df = yf.download(s["ticker"], period="4mo", progress=False)
-            data[s["ticker"]] = df if not df.empty else None
-        except Exception:
-            data[s["ticker"]] = None
+    try:
+        batch = yf.download(tickers, period="4mo", progress=False, threads=False, group_by="ticker")
+    except Exception:
+        batch = None
+
+    for t in tickers:
+        df = None
+        if batch is not None and not batch.empty:
+            try:
+                if len(tickers) == 1:
+                    df = batch
+                else:
+                    df = batch[t]
+                if df is not None and df.dropna(how="all").empty:
+                    df = None
+            except Exception:
+                df = None
+        if df is None:
+            # 배치 실패한 종목만 개별 재시도
+            df = _download_with_retry(t, "4mo")
+        data[t] = df
+
     return data, usd_krw
 
 
@@ -415,7 +450,7 @@ for r in results:
         "상태":           signal_label(r),
     })
 
-st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
 
 st.divider()
 
