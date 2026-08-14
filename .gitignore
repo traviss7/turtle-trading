@@ -1,0 +1,10 @@
+# KIS API 비밀 정보 — 절대 커밋 금지
+.env
+kis_config.py
+.kis_token_cache.json
+
+# 백테스트 결과물
+results/
+
+__pycache__/
+*.pyc

@@ -1,0 +1,8 @@
+# 한국투자증권 Open API 설정 (.env 대신 이 방식을 써도 됩니다)
+# 이 파일을 kis_config.py 로 복사한 뒤 본인의 값을 채워넣으세요.
+#   cp kis_config.py.example kis_config.py
+# kis_config.py 는 .gitignore 에 등록되어 있어 저장소에 올라가지 않습니다.
+
+APP_KEY = "여기에_appkey_붙여넣기"
+APP_SECRET = "여기에_appsecret_붙여넣기"
+ACCOUNT_NO = ""  # 백테스트에는 불필요
